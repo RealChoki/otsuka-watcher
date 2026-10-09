@@ -27,6 +27,11 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR_ID/YOUR_TOKEN
 
 Your supplied webhook is already saved in this workspace's `.env`. Both `.env` and `notified.json` are ignored by Git. Keep the webhook private.
 
+Alerts mention `@everyone`. To also ping a specific person, set `DISCORD_USER_ID`
+to their numeric Discord user ID in `.env` and in a GitHub Actions secret with
+the same name. Enable Discord Developer Mode and use **Copy User ID** on their
+profile. The webhook needs permission to mention everyone in its channel.
+
 ## Test one check
 
 ```powershell

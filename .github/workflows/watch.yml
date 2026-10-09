@@ -53,6 +53,7 @@ jobs:
       - name: Check reservations
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          DISCORD_USER_ID: ${{ secrets.DISCORD_USER_ID }}
         run: python main.py --once
 
       # A failed check can still have delivered some notifications.

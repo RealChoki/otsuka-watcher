@@ -174,6 +174,10 @@ def save_notified(entries):
 
 
 def notify(webhook, day, slot_time):
+    user_id = os.getenv("DISCORD_USER_ID", "").strip()
+    if user_id and not user_id.isdecimal():
+        raise RuntimeError("DISCORD_USER_ID must be a numeric Discord user ID")
+    mentions = "@everyone" + (f" <@{user_id}>" if user_id else "")
     # Avoid requests' exception text: it can include the secret webhook URL.
     try:
         response = requests.post(
@@ -181,10 +185,11 @@ def notify(webhook, day, slot_time):
             params={"wait": "true"},
             json={
                 "content": (
+                    f"{mentions}\n"
                     f"Otsuka Berlin: table for {PEOPLE} selectable on "
                     f"{day} at {slot_time} (Europe/Berlin).\n{BOOKING_URL}"
                 ),
-                "allowed_mentions": {"parse": []},
+                "allowed_mentions": {"parse": ["everyone"], "users": [user_id] if user_id else []},
             },
             timeout=20,
         )
