@@ -1,0 +1,4 @@
+playwright>=1.48,<2
+requests>=2.32,<3
+python-dotenv>=1.0,<2
+tzdata>=2024.1

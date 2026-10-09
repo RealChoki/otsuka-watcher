@@ -1,0 +1,77 @@
+name: Watch Otsuka
+
+on:
+  schedule:
+    - cron: '7,27,47 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: otsuka-watcher
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Restore notification history
+        id: history
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('node:fs');
+            const {data} = await github.rest.repos.getContent({
+              ...context.repo, path: 'notified.json', ref: 'watcher-state'
+            });
+            const content = data.content.replace(/\n/g, '');
+            const buffer = Buffer.from(content, 'base64');
+            const entries = JSON.parse(buffer.toString('utf8'));
+            if (!Array.isArray(entries) || !entries.every(x => typeof x === 'string')) {
+              throw new Error('Invalid notification history; stopping to avoid duplicates');
+            }
+            fs.writeFileSync('notified.json', buffer);
+            core.setOutput('sha', data.sha);
+            core.setOutput('content', content);
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install dependencies and Chromium
+        run: |
+          python -m pip install -r requirements.txt
+          python -m playwright install --with-deps chromium
+
+      - name: Check reservations
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python main.py --once
+
+      # A failed check can still have delivered some notifications.
+      - name: Save notification history
+        if: ${{ always() && steps.history.outcome == 'success' }}
+        uses: actions/github-script@v9
+        env:
+          HISTORY_SHA: ${{ steps.history.outputs.sha }}
+          HISTORY_CONTENT: ${{ steps.history.outputs.content }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const content = fs.readFileSync('notified.json').toString('base64');
+            if (content === process.env.HISTORY_CONTENT) {
+              core.info('Notification history unchanged');
+              return;
+            }
+            await github.rest.repos.createOrUpdateFileContents({
+              ...context.repo, path: 'notified.json', branch: 'watcher-state',
+              message: 'Save notified reservation slots',
+              content, sha: process.env.HISTORY_SHA
+            });

@@ -1,0 +1,7 @@
+.env
+notified.json
+notified.json.tmp
+.venv/
+.playwright/
+.tmp/
+__pycache__/
