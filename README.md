@@ -86,6 +86,11 @@ The booking URL was supplied from Otsuka's Instagram Reserve button, and its pag
 
 The watcher uses normal Playwright interactions and condition-based waits. It verifies `2 guests`, selects every date through its accessible calendar label, and waits for the calendar's selected marker. That marker changes after the widget finishes loading the date. It also checks HTTP/data errors on browser-generated availability responses; it never calls Zenchef's internal endpoints directly.
 
+When Zenchef shows date shortcuts, the watcher opens the full calendar through
+**Other**. It waits for panels to expand or collapse before clicking the next
+control. Dates marked "Online reservations aren't open yet" are logged as having
+no currently bookable times.
+
 Each displayed service is scanned using the widget's actual `slot-available-...-btn` controls. A notification requires an enabled time control, a successful click, the widget's `data-selected` marker, the corresponding time header, two guests, and an enabled Reserve button. Waitlist controls and one-person-only times are excluded. Clickable calendar dates alone never count as availability. Missing controls, unexpected response data, timeouts, or access challenges cause a logged error.
 
 The watcher **never clicks Reserve**, submits a booking, enters personal/payment details, or bypasses CAPTCHAs/anti-bot restrictions. Otsuka states that reservations need a separate confirmation email, so an alert means a time is selectable for a reservation request, not that a reservation has been accepted. Availability can disappear before you open the page.

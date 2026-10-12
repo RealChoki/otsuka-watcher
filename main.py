@@ -24,7 +24,7 @@ INTERVAL = 1200
 NO_AVAILABILITY = re.compile(
     r"No online openings for 2 guests|We are closed on |"
     r"isn.t available online|waitlist only|Next online opening|"
-    r"There is no availability with experience"
+    r"There is no availability with experience|Online reservations aren't open yet\."
 )
 
 BOOKING_URL = "https://bookings.zenchef.com/results?rid=365906&pid=instagram&lang=en"
@@ -33,12 +33,27 @@ if (ROOT / ".playwright").exists():
     os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", str(ROOT / ".playwright"))
 
 
+def open_calendar(page):
+    calendar = page.get_by_test_id("calendar-accordion-item")
+    content = calendar.locator("xpath=following-sibling::div[1]")
+    if content.evaluate("el => getComputedStyle(el).visibility") != "visible":
+        calendar.click()
+    expect(content).to_have_css("visibility", "visible")
+    cells = page.get_by_role("gridcell")
+    if cells.first.is_visible():
+        return
+    other = page.get_by_text("Other", exact=True)
+    cells.or_(other).first.wait_for(state="visible")
+    if other.is_visible():
+        other.click()
+    cells.first.wait_for(state="visible")
+
+
 def select_date(page, day):
     """The selected marker changes only after the widget finishes loading the day."""
     label = f"{day:%A}, {day.day} {day:%B %Y}"
     cell = page.get_by_role("gridcell", name=label, exact=True)
-    if not page.get_by_role("gridcell").first.is_visible():
-        page.get_by_test_id("calendar-accordion-item").click()
+    open_calendar(page)
     # A ten-day window can cross a month; the widget may initially jump ahead.
     for _ in range(4):
         middle = page.get_by_role("gridcell").nth(15).get_attribute("aria-label")
@@ -102,10 +117,7 @@ def check_availability(dates):
                 page.get_by_test_id("2guest-btn").click()
             expect(guests).to_have_text("2 guests")
             # Open the calendar and let the normal initial availability load finish.
-            calendar = page.get_by_test_id("calendar-accordion-item")
-            if not page.get_by_role("gridcell").first.is_visible():
-                calendar.click()
-            page.get_by_role("gridcell").first.wait_for(state="visible")
+            open_calendar(page)
             selected = page.locator('[role="gridcell"][aria-selected="true"]')
             initial_label = selected.get_attribute("aria-label")
             # Checking the initial date last makes every click change the selection.
@@ -122,6 +134,7 @@ def check_availability(dates):
                     available = page.locator('button[data-testid^="slot-available-"]')
                     if not available.first.is_visible():
                         slot_panel.click()
+                    available.first.wait_for(state="visible")
                     ids = available.evaluate_all(
                         "els => els.filter(e => e.getClientRects().length).map(e => e.dataset.testid)"
                     )
@@ -144,6 +157,9 @@ def check_availability(dates):
                         # Enabled Reserve means the selected slot can continue.
                         # Never click it: Otsuka requires an offer and manual confirmation.
                         expect(page.get_by_role("button", name="Reserve", exact=True)).to_be_enabled()
+                        # Selection closes the accordion with an animation. Wait
+                        # for it to finish before reopening for the next time.
+                        expect(button).to_be_hidden()
                         found.add((day.isoformat(), slot_time))
                         logging.info("Confirmed selectable: %s %s for 2", day, slot_time)
                     count = sum(found_day == day.isoformat() for found_day, _ in found)
